@@ -9,6 +9,7 @@ library(formattable)
 library(RQuantLib)
 library(Rblpapi) 
 library(corrplot)
+library(jtools)
 blpConnect()
 
 
@@ -40,15 +41,34 @@ Price1 <- Price %>%
   ungroup() %>%
   gather(price, return, key = "cat", value = "value")
   
-key <- "return"
+# key <- "return"
+# 
+# train <-Price1 %>%
+#   filter(cat == key) %>%
+#   arrange(-desc(date)) %>%
+#   group_by(ticker) %>%
+#   ungroup() %>%
+#   spread(ticker, value) %>%
+#   filter(row_number(date) <= 800)
+# 
+# test <- Price1 %>%
+#   filter(cat == key) %>%
+#   arrange(-desc(date)) %>%
+#   group_by(ticker) %>%
+#   ungroup() %>%
+#   spread(ticker, value) %>%
+#   filter(row_number(date) > 800)
+# 
+# key <- "return"
 
 train <-Price1 %>%
-  filter(cat == key) %>%
+  filter(cat == return) %>%
   arrange(-desc(date)) %>%
   group_by(ticker) %>%
+  mutate(value = cumprod(1 + value))
   ungroup() %>%
   spread(ticker, value) %>%
-  filter(row_number(date) <= 500)
+  filter(row_number(date) <= 800)
 
 test <- Price1 %>%
   filter(cat == key) %>%
@@ -56,7 +76,7 @@ test <- Price1 %>%
   group_by(ticker) %>%
   ungroup() %>%
   spread(ticker, value) %>%
-  filter(row_number(date) > 500)
+  filter(row_number(date) > 800)
 
 at1_model <- lm(IBXXC1P1 ~ DXY + SX7E + VXX, data = train)
 summary(at1_model)
@@ -67,12 +87,35 @@ result <- test %>%
   mutate(result = predict(at1_model, test))
 
 return <- result %>%
-  select(date, IBXXC1D1, result) %>%
+  select(date, IBXXC1D1, IBXXC1P1, result) %>%
   mutate(index_return = percent(IBXXC1D1 / IBXXC1D1[1] - 1),
          model_return = percent(result / result[1] - 1),
+         price_return = percent(IBXXC1P1 / IBXXC1P1[1] - 1),
          strategy = percent(index_return - model_return))
 
 ggplot(data = return) +
   geom_line(aes(x = date, y = index_return)) +
   geom_line(aes(x = date, y = model_return), color = "red") +
+  geom_line(aes(x = date, y = price_return), color = "green") +
   geom_line(aes(x = date, y = strategy), color = "blue")
+
+strategy <- return %>%
+  select(date, strategy, index_return) %>%
+  mutate(strategy = (strategy + 1) / (lag(strategy) + 1) - 1,
+         index_return = (index_return + 1) / (lag(index_return) + 1) - 1) %>%
+  filter(is.na(strategy) == FALSE,
+         is.na(index_return) == FALSE)
+
+strategy <- xts(strategy %>% select(-date), order.by = strategy$date)
+Return.annualized(strategy)
+StdDev.annualized(strategy)
+SharpeRatio.annualized(strategy)
+table.InformationRatio(strategy$strategy, strategy$index_return)
+
+corr <- Price1 %>% 
+  filter(cat == "return") %>% 
+  select(-cat) %>% spread(key = ticker, value = value) %>% 
+  select(-date) %>%
+  cor() %>%
+  corrplot(type = "upper")
+
