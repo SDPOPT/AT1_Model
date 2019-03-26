@@ -14,7 +14,9 @@ blpConnect()
 
 ID <- tibble( ID = c("GB00BQY78G05 Index", "GB00BQY78F97 Index", 
                      "EU0009658426 Index", "VIXY US Equity",
-                     "DXY Curncy", "SPX Index", "USGG10YR  Index")) %>%
+                     "DXY Curncy", "SPX Index", "USGG10YR  Index",
+                     "FEZ US Equity", "SX7EEX GY Equity",
+                     "IEF US Equity")) %>%
   mutate(ticker = bdp(ID, "TICKER")$TICKER)
 
 Price <- bdh(ID$ID, "PX_LAST", Sys.Date() - 3000, Sys.Date() - 1) 
@@ -36,7 +38,7 @@ Price1 <- Price %>%
 train <- Price1 %>%
   arrange(-desc(date)) %>%
   group_by(ticker) %>%
-  filter(row_number(date) <= 600) %>%
+  filter(row_number(date) <= 500) %>%
   mutate(value = price / price[1]) %>%
   ungroup() %>%
   select(date, ticker, value) %>%
@@ -45,13 +47,13 @@ train <- Price1 %>%
 test <- Price1 %>%
   arrange(-desc(date)) %>%
   group_by(ticker) %>%
-  filter(row_number(date) > 600) %>%
+  filter(row_number(date) > 500) %>%
   mutate(value = price / price[1]) %>%
   ungroup() %>%
   select(date, ticker, value) %>%
   spread(ticker, value)
 
-at1_model <- lm(IBXXC1P1 ~ DXY + SX7E + VIXY, data = train)
+at1_model <- lm(IBXXC1P1 ~ DXY + SX7E + VIXY + IEF, data = train)
 summary(at1_model)
 anova(at1_model)
 
@@ -86,7 +88,6 @@ table.InformationRatio(strategy$strategy, strategy$index_return)
 maxDrawdown(strategy)
 
 corr <- Price1 %>% 
-  filter(cat == "return") %>% 
   select(-cat) %>% spread(key = ticker, value = value) %>% 
   select(-date) %>%
   cor() %>%
