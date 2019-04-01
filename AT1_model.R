@@ -1,4 +1,5 @@
 library(tidyquant)
+library(xgboost)
 library(RSQLite)
 library(readxl)
 library(xlsx)
@@ -14,9 +15,8 @@ blpConnect()
 
 ID <- tibble( ID = c("GB00BQY78G05 Index", "GB00BQY78F97 Index", 
                      "EU0009658426 Index", "VIXY US Equity",
-                     "DXY Curncy", "SPX Index", "USGG10YR  Index",
-                     "FEZ US Equity", "SX7EEX GY Equity",
-                     "IEF US Equity")) %>%
+                     "DXY Curncy", "SPX Index", "GT10 Govt",
+                     "GTDEM10Y Govt")) %>%
   mutate(ticker = bdp(ID, "TICKER")$TICKER)
 
 Price <- bdh(ID$ID, "PX_LAST", Sys.Date() - 3000, Sys.Date() - 1) 
@@ -33,7 +33,14 @@ Price1 <- Price %>%
   mutate(count = NROW(ticker)) %>%
   ungroup() %>%
   filter(count == max(count)) %>%
-  select(date, ticker, price = PX_LAST)
+  select(date, ticker, price = PX_LAST) %>%
+  group_by(ticker) %>%
+  mutate(return = na.fill(price / lag(price) - 1, 0)) %>%
+  mutate(cum_return = cumprod(1 + return)) %>%
+  ungroup()
+
+ggplot(data = Price1, aes(x = date, y = cum_return, color = ticker)) +
+  geom_line()
   
 train <- Price1 %>%
   arrange(-desc(date)) %>%
@@ -92,4 +99,13 @@ corr <- Price1 %>%
   select(-date) %>%
   cor() %>%
   corrplot(type = "upper")
+
+
+dtrain <- xgb.DMatrix(data = data, label = label)
+model <- xgboost(data = dtrain,
+                 booster = "gblinear",
+                 max.depth = 5,
+                 eta = 1,
+                 nthred = 2,
+                 nrounds = 2)
 
