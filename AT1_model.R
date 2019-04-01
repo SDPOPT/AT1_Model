@@ -1,5 +1,6 @@
 library(tidyquant)
 library(xgboost)
+library(gbm)
 library(RSQLite)
 library(readxl)
 library(xlsx)
@@ -16,7 +17,8 @@ blpConnect()
 ID <- tibble( ID = c("GB00BQY78G05 Index", "GB00BQY78F97 Index", 
                      "EU0009658426 Index", "VIXY US Equity",
                      "DXY Curncy", "SPX Index", "GT10 Govt",
-                     "GTDEM10Y Govt")) %>%
+                     "GTDEM10Y Govt", "IEF US Equity",
+                     "UUP US Equity", "SX7EEX GR Equity")) %>%
   mutate(ticker = bdp(ID, "TICKER")$TICKER)
 
 Price <- bdh(ID$ID, "PX_LAST", Sys.Date() - 3000, Sys.Date() - 1) 
@@ -45,7 +47,7 @@ ggplot(data = Price1, aes(x = date, y = cum_return, color = ticker)) +
 train <- Price1 %>%
   arrange(-desc(date)) %>%
   group_by(ticker) %>%
-  filter(row_number(date) <= 500) %>%
+  filter(row_number(date) <= 600) %>%
   mutate(value = price / price[1]) %>%
   ungroup() %>%
   select(date, ticker, value) %>%
@@ -54,13 +56,13 @@ train <- Price1 %>%
 test <- Price1 %>%
   arrange(-desc(date)) %>%
   group_by(ticker) %>%
-  filter(row_number(date) > 500) %>%
+  filter(row_number(date) > 600) %>%
   mutate(value = price / price[1]) %>%
   ungroup() %>%
   select(date, ticker, value) %>%
   spread(ticker, value)
 
-at1_model <- lm(IBXXC1P1 ~ DXY + SX7E + VIXY + IEF, data = train)
+at1_model <- lm(IBXXC1P1 ~ UUP + SX7EEX + VIXY, data = train)
 summary(at1_model)
 anova(at1_model)
 
@@ -100,12 +102,19 @@ corr <- Price1 %>%
   cor() %>%
   corrplot(type = "upper")
 
+train_data <- train %>%
+  select(-date, -IBXXC1D1, -IBXXC1P1) %>%
+  as.matrix()
 
-dtrain <- xgb.DMatrix(data = data, label = label)
+train_label <- train %>%
+  select(IBXXC1P1) %>%
+  as.matrix()
+
+dtrain <- xgb.DMatrix(data = train_data, label = train_label)
 model <- xgboost(data = dtrain,
                  booster = "gblinear",
-                 max.depth = 5,
+                 max.depth = 10,
                  eta = 1,
-                 nthred = 2,
-                 nrounds = 2)
+                 nthred = 3,
+                 nrounds = 10)
 
