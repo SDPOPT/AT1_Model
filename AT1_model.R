@@ -62,7 +62,7 @@ test <- Price1 %>%
   select(date, ticker, value) %>%
   spread(ticker, value)
 
-at1_model <- lm(IBXXC1P1 ~ UUP + SX7EEX + VIXY, data = train)
+at1_model <- lm(IBXXC1P1 ~ DXY + SX7E + VIXY, data = train)
 summary(at1_model)
 anova(at1_model)
 
