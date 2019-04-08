@@ -27,44 +27,64 @@ Price <- mapply(function(x, y) {y <- y %>% mutate(ID = x) },
        names(Price), Price, 
        USE.NAMES = FALSE, SIMPLIFY = FALSE)
 Price <- as_tibble(do.call("bind_rows", Price)) %>%
-  left_join(ID)
+  left_join(ID) %>%
+  select(date, ticker, price = PX_LAST)
 
-Price1 <- Price %>% 
-  filter(is.na(PX_LAST) == FALSE) %>%
+lag1 <- data_lag(Price, 1)
+lag2 <- data_lag(Price, 2)
+lag3 <- data_lag(Price, 3)
+
+Price1 <- rbind(Price, lag1, lag2, lag3) %>% 
+  filter(is.na(price) == FALSE) %>%
   group_by(date) %>%
   mutate(count = NROW(ticker)) %>%
   ungroup() %>%
   filter(count == max(count)) %>%
-  select(date, ticker, price = PX_LAST) %>%
-  group_by(ticker) %>%
-  mutate(return = na.fill(price / lag(price) - 1, 0)) %>%
-  mutate(cum_return = cumprod(1 + return)) %>%
-  ungroup()
-
-ggplot(data = Price1, aes(x = date, y = cum_return, color = ticker)) +
-  geom_line()
+  select(-count)
   
-train <- Price1 %>%
+
+Price1 %>% filter(grepl("lag", ticker) == FALSE) %>%
+  group_by(ticker) %>% 
+  mutate(cum_return = price / price[1]) %>% 
+  ggplot(aes(x = date, y = cum_return, color = ticker)) +
+  geom_line()
+
+data_lag <- function(Price, n = 1){
+  
+  lag_data <- Price %>%
+    group_by(ticker) %>%
+    arrange(-desc(date)) %>%
+    mutate(price = lag(price, k = n)) %>%
+    ungroup() %>%
+    mutate(ticker = paste(ticker, "_lag", n, sep = ""))
+             
+}
+
+linear_model <- function(Price, N) {  
+
+train <- Price %>%
   arrange(-desc(date)) %>%
   group_by(ticker) %>%
-  filter(row_number(date) <= 600) %>%
+  filter(row_number(date) <= N) %>%
   mutate(value = price / price[1]) %>%
   ungroup() %>%
   select(date, ticker, value) %>%
   spread(ticker, value)
- 
+
+model <- lm(IBXXC1P1 ~ DXY + SX7E + VIXY, data = train)
+
+}
+
 test <- Price1 %>%
   arrange(-desc(date)) %>%
   group_by(ticker) %>%
-  filter(row_number(date) > 600) %>%
+  filter(row_number(date) > 300) %>%
   mutate(value = price / price[1]) %>%
   ungroup() %>%
   select(date, ticker, value) %>%
   spread(ticker, value)
 
-at1_model <- lm(IBXXC1P1 ~ DXY + SX7E + VIXY, data = train)
 summary(at1_model)
-anova(at1_model)
 
 result <- test %>%
   mutate(result = predict(at1_model, test))
