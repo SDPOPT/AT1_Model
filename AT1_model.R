@@ -31,12 +31,11 @@ Price <- as_tibble(do.call("bind_rows", Price)) %>%
   left_join(ID) %>%
   select(date, ticker, price = PX_LAST)
 
-# lag1 <- data_lag(Price, 1)
-# lag2 <- data_lag(Price, 2)
-# lag3 <- data_lag(Price, 3)
+lag1 <- data_lag(Price, 1)
+lag2 <- data_lag(Price, 2)
+lag3 <- data_lag(Price, 3)
 
-Price1 <- Price %>%
-  # rbind(Price, lag1, lag2, lag3) %>% 
+Price1 <- rbind(Price, lag1, lag2, lag3) %>% 
   filter(is.na(price) == FALSE) %>%
   group_by(date) %>%
   mutate(count = NROW(ticker)) %>%
@@ -51,19 +50,19 @@ Price1 <- Price %>%
 #   ggplot(aes(x = date, y = cum_return, color = ticker)) +
 #   geom_line()
 
-# data_lag <- function(Price, n = 1){
-#   
-#   lag_data <- Price %>%
-#     group_by(ticker) %>%
-#     arrange(-desc(date)) %>%
-#     mutate(price = lag(price, k = n)) %>%
-#     ungroup() %>%
-#     mutate(ticker = paste(ticker, "_lag", n, sep = ""))
-#              
-# }
+data_lag <- function(Price, n = 1){
+
+  lag_data <- Price %>%
+    group_by(ticker) %>%
+    arrange(-desc(date)) %>%
+    mutate(price = lag(price, k = n)) %>%
+    ungroup() %>%
+    mutate(ticker = paste(ticker, "_lag", n, sep = ""))
+
+}
 
 
-N <- 500
+N <- 900
 
 train <- Price1 %>%
   arrange(-desc(date)) %>%
@@ -74,7 +73,7 @@ train <- Price1 %>%
   select(date, ticker, value) %>%
   spread(ticker, value)
 
-model <- lm(IBXXC1P1 ~ DXY + SX7E + VIXY, data = train)
+model <- lm(IBXXC1P1 ~ DXY_lag1 + SX7E_lag1 + VIXY_lag1, data = train)
 
 summary(model)
 
